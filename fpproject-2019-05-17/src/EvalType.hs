@@ -59,8 +59,8 @@ find_bind vn Context { binds = ms } =
     Just tr -> return tr
     _ -> lift Nothing
 
-with_var :: String -> Type -> ContextState Type -> ContextState Type
-with_var vn vt a = do
+withVar :: String -> Type -> ContextState Type -> ContextState Type
+withVar vn vt a = do
   c0 <- get
   put $ add_bind vn vt c0
   t1 <- a
@@ -89,33 +89,39 @@ eval (ELe e1 e2) = typeComp e1 e2 >> return TBool
 eval (EGe e1 e2) = typeComp e1 e2 >> return TBool
 eval (EIf e1 e2 e3) = isBool e1 >> typeEq e2 e3
 
--- WRONG! And with var not done yet, in Let and LetRec they all need put the env back
--- eval (ELambda (pn, pt) e) = do
---   c <- get
---   put $ add_bind pn pt c
---   rt <- eval e
---   return $ TArrow pt rt
+-- With var not done yet, in Let and LetRec they all need put the env back
 
 eval (ELambda (pn, pt) e) = do
-  rt <- with_var pn pt $ eval e
+  rt <- withVar pn pt $ eval e
   return $ TArrow pt rt
 
 eval (ELet (str, e1) e2) = do
   t1 <- eval e1
-  tr <- with_var str t1 $ eval e2
-  -- c <- get
-  -- put $ add_bind str t1 c
-  -- t2 <- eval e2
+  tr <- withVar str t1 $ eval e2
   return tr
+
+-- eval (ELetRec f (x, tx) (e1, ty) e2) = do
+--   c0 <- get
+--   put $ add_bind f (TArrow tx ty) (add_bind x tx c0)
+--   t1 <- eval e1
+--   tr <- eval e2
+--   if t1 == ty then
+--     return tr
+--   else lift Nothing
 
 eval (ELetRec f (x, tx) (e1, ty) e2) = do
   c0 <- get
-  put $ add_bind f (TArrow tx ty) (add_bind x tx c0)
+  put $ add_bind f (TArrow tx ty) c0
+  c1 <- get
+  put $ add_bind x tx c1
   t1 <- eval e1
+  put c1
   tr <- eval e2
+  put c0 
   if t1 == ty then
     return tr
   else lift Nothing
+
 
 eval (EVar s) = do 
   c <- get
@@ -134,9 +140,20 @@ eval _ = undefined
 
 ---------------------------- some my own test --------------------------------
 
--- expr_apply = EVar "even"
-expr_let = ELet ("x",(EIntLit 3)) (EMod (EVar "x") (EIntLit 2))
-expr_my_bad = EAdd expr_let (EVar "x")
+expr_my_fact = EIf (EEq (EVar "x") (EIntLit 0))
+  (EIntLit 1)
+  (EMul 
+    (EVar "x") 
+    (EApply 
+      (EVar "fact") 
+      (ESub (EVar "x") (EIntLit 1))
+      )
+    )
+expr_my_let_rec = ELetRec "fact" ("x", TInt) (expr_my_fact, TInt) (EApply (EVar "fact") (EIntLit 4))
+expr_my_let_rec_bad = EAdd (expr_my_let_rec) (EVar "x")
+
+expr_my_let = ELet ("x",(EIntLit 3)) (EMod (EVar "x") (EIntLit 2))
+expr_my_let_bad = EAdd expr_my_let (EVar "x")
 
 evalTypeExpr :: Expr -> Maybe (Type, Context)
 evalTypeExpr exp = runStateT (eval exp) $ Context { binds = Map.empty }
