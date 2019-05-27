@@ -100,28 +100,15 @@ eval (ELet (str, e1) e2) = do
   tr <- withVar str t1 $ eval e2
   return tr
 
--- eval (ELetRec f (x, tx) (e1, ty) e2) = do
---   c0 <- get
---   put $ add_bind f (TArrow tx ty) (add_bind x tx c0)
---   t1 <- eval e1
---   tr <- eval e2
---   if t1 == ty then
---     return tr
---   else lift Nothing
-
 eval (ELetRec f (x, tx) (e1, ty) e2) = do
   c0 <- get
   put $ add_bind f (TArrow tx ty) c0
-  c1 <- get
-  put $ add_bind x tx c1
-  t1 <- eval e1
-  put c1
+  t1 <- withVar x tx $ eval e1
   tr <- eval e2
-  put c0 
+  put c0
   if t1 == ty then
     return tr
   else lift Nothing
-
 
 eval (EVar s) = do 
   c <- get
