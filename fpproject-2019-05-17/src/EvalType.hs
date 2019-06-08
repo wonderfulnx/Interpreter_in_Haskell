@@ -6,7 +6,7 @@ import Control.Monad.State
 -- import qualified Data.Map as Map
 import qualified Data.Map.Strict as Map
 
--- store name and type pair in binds
+---------------------- store name and type pair in binds ----------------------
 data Context = Context { binds :: Map.Map String Type }
   deriving (Show, Eq) -- 可以用某种方式定义上下文，用于记录变量绑定状态
 
@@ -145,7 +145,7 @@ expr_my_fact = EIf (EEq (EVar "x") (EIntLit 0))
       (ESub (EVar "x") (EIntLit 1))
       )
     )
-expr_my_let_rec = ELetRec "fact" ("x", TInt) (expr_my_fact, TInt) (EApply (EVar "fact") (EIntLit 4))
+expr_my_let_rec = ELetRec "fact" ("x", TInt) (expr_my_fact, TInt) (EApply (EVar "fact") (EIntLit 6))
 expr_my_let_rec_bad = EAdd (expr_my_let_rec) (EVar "x")
 
 expr_my_let = ELet ("x",(EIntLit 3)) (EMod (EVar "x") (EIntLit 2))

@@ -41,3 +41,9 @@ test_let_wrong_1 = assertEqual (Nothing) (EvalType.evalType $ Program [] my_expr
 test_letrec_right_1 = assertEqual (Just TInt) (EvalType.evalType $ Program [] my_expr_letrec_0)
 test_letrec_wrong_1 = assertEqual (Nothing) (EvalType.evalType $ Program [] my_expr_letrec_bad_0)
 test_letrec_wrong_2 = assertEqual (Nothing) (EvalType.evalType $ Program [] my_expr_letrec_bad_1)
+
+test_let_val_right_1 = assertEqual (RInt 1) (EvalValue.evalValue $ Program [] my_expr_let_0)
+test_let_val_wrong_1 = assertEqual (RInvalid) (EvalValue.evalValue $ Program [] my_expr_let_bad_0)
+test_letrec_val_right_1 = assertEqual (RInt 120) (EvalValue.evalValue $ Program [] my_expr_letrec_0)
+test_letrec_val_wrong_1 = assertEqual (RInvalid) (EvalValue.evalValue $ Program [] my_expr_letrec_bad_0)
+test_letrec_val_wrong_2 = assertEqual (RInvalid) (EvalValue.evalValue $ Program [] my_expr_letrec_bad_1)
