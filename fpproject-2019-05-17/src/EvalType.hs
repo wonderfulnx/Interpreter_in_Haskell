@@ -12,6 +12,8 @@ data Context = Context { binds :: Map.Map String Type }
 
 type ContextState a = StateT Context Maybe a
 
+------------------------------ judge is type function --------------------------
+
 isBool :: Expr -> ContextState Type
 isBool e = do
   et <- eval e
@@ -49,6 +51,8 @@ typeComp e1 e2 = do
     then return et1
     else lift Nothing
 
+---------------------------- Context Edition Function ---------------------------
+
 add_bind :: String -> Type -> Context -> Context
 add_bind vn vt Context { binds = ms } =
   Context { binds = Map.insert vn vt ms}
@@ -66,13 +70,18 @@ withVar vn vt a = do
   t1 <- a
   put c0
   return t1
+
+---------------------------------- Evaluate Funtion ---------------------------------
   
 eval :: Expr -> ContextState Type
+
+-------------- Bool section -----------
 eval (EBoolLit _) = return TBool
 eval (ENot e) = isBool e
 eval (EAnd e1 e2) = isBool e1 >> isBool e2
 eval (EOr e1 e2) = isBool e1 >> isBool e2
 
+-------------- Int section -----------
 eval (EIntLit _) = return TInt
 eval (EAdd e1 e2) = isInt e1 >> isInt e2
 eval (ESub e1 e2) = isInt e1 >> isInt e2
@@ -80,6 +89,7 @@ eval (EMul e1 e2) = isInt e1 >> isInt e2
 eval (EDiv e1 e2) = isInt e1 >> isInt e2
 eval (EMod e1 e2) = isInt e1 >> isInt e2
 
+-------------- Expr section -----------
 eval (ECharLit _) = return TChar
 eval (EEq e1 e2) = typeEq e1 e2 >> return TBool
 eval (ENeq e1 e2) = typeEq e1 e2 >> return TBool
@@ -89,8 +99,7 @@ eval (ELe e1 e2) = typeComp e1 e2 >> return TBool
 eval (EGe e1 e2) = typeComp e1 e2 >> return TBool
 eval (EIf e1 e2 e3) = isBool e1 >> typeEq e2 e3
 
--- With var not done yet, in Let and LetRec they all need put the env back
-
+-------------- Complex section -----------
 eval (ELambda (pn, pt) e) = do
   rt <- withVar pn pt $ eval e
   return $ TArrow pt rt
