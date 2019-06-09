@@ -209,6 +209,25 @@ my_two_lambda_expr = EApply (EApply two_lambda_expr (EIntLit 3)) (EIntLit 4)
 two_lambda_expr_2 = ELambda ("x", TInt) (ELambda ("x", TInt) (EAdd (EVar "x") (EVar "x")))
 my_two_lambda_expr_2 = EApply (EApply two_lambda_expr_2 (EIntLit 3)) (EIntLit 4)
 
+-- 中间类型的lambda
+my_two_lambda_expr_3 = EApply two_lambda_expr (EIntLit 3)
+
+-- 一个复杂测例
+three_lambda_expr_part1 = 
+  ELambda ("y", TInt) (
+    ELambda ("z", TInt) (
+      EAdd (EVar "x") (EAdd (EVar "y") (EVar "z"))
+    )
+  )
+three_lambda_expr =
+  EApply (
+    EApply (
+      ELambda ("x", TInt) (
+        EApply three_lambda_expr_part1 (EIntLit 2)
+      )
+    ) (EIntLit 1)) (EIntLit 3)
+
+
 -----------------------------------------------------------------------------
 
 evalProgram :: Program -> Maybe Value
