@@ -10,9 +10,8 @@ data Value
   = VBool Bool
   | VInt Int
   | VChar Char
-  -- VExpr 是一个表达式，String和Value保存一层已经知道的值
-  | VExpr Expr (Map.Map String Value)
-  | Nil
+  -- VLambda 表示一个Lambda表达式，String保存其参数，Mapping保存局部变量(已知)
+  | VLambda String Expr (Map.Map String Value)
   -- ... more
   deriving (Show, Eq)
 
@@ -21,8 +20,8 @@ instance Ord Value where
   VChar v1 <= VChar v2 = (v1 <= v2)
 
 ---------------------------- Context definition -----------------------
--- binds保存变量名到变量的映射，appValue保存Apply时外部传给内部的值
-data Context = Context { binds :: Map.Map String Value, appValue :: Value }
+-- binds保存变量名到变量的映射
+data Context = Context { binds :: Map.Map String Value }
   deriving (Show, Eq)
 
 type ContextState a = StateT Context Maybe a
@@ -64,28 +63,18 @@ valueCompare e1 e2 func = do
 -------------------------------- Context Edition Function ---------------------------
 
 add_bind :: String -> Value -> Context -> Context
-add_bind vn ve Context { binds = ms, appValue = val } =
-  Context { binds = Map.insert vn ve ms, appValue = val}
+add_bind vn ve Context { binds = ms } =
+  Context { binds = Map.insert vn ve ms }
 
-union_bind :: Map.Map String Value -> Context -> Context
-union_bind local Context { binds = ms, appValue = val } = 
-  Context { binds = Map.union local ms, appValue = val }
+add_binds :: Map.Map String Value -> Context -> Context
+add_binds local Context { binds = ms } = 
+  Context { binds = Map.union local ms }
 
 find_bind :: String -> Context -> ContextState Value
-find_bind vn Context { binds = ms, appValue = val } =
+find_bind vn Context { binds = ms } =
   case Map.lookup vn ms of
     Just val -> return val
     _ -> lift Nothing
-
-put_app_val :: Value -> Context -> Context
-put_app_val ve Context { binds = ms, appValue = val } = 
-  Context { binds = ms, appValue = ve}
-
-get_app_val :: Context -> Maybe Value
-get_app_val Context { binds = ms, appValue = val } = 
-  case val of
-    Nil -> Nothing
-    x -> Just x
 
 withVar :: String -> Value -> ContextState Value -> ContextState Value
 withVar vn ve a = do
@@ -95,10 +84,10 @@ withVar vn ve a = do
   put c0
   return val1
 
-withApplyVar :: Value -> ContextState Value -> ContextState Value
-withApplyVar ve a = do
+withVars :: Map.Map String Value -> ContextState Value -> ContextState Value
+withVars ms a = do
   c0 <- get
-  put $ put_app_val ve c0
+  put $ add_binds ms c0
   val1 <- a
   put c0
   return val1
@@ -110,8 +99,20 @@ eval :: Expr -> ContextState Value
 -------------- Bool section -----------
 eval (EBoolLit b) = return $ VBool b
 eval (ENot e) = getBool e >>= \b -> return (VBool $ not b)
-eval (EAnd e1 e2) = binaryBool e1 e2 (&&)
-eval (EOr e1 e2) = binaryBool e1 e2 (||)
+
+-- short-circuit evaluation for `and` and `or`
+eval (EAnd e1 e2) = do
+  ev1 <- getBool e1
+  if ev1 then do
+    ev2 <- getBool e2
+    return $ VBool ev2
+  else return $ VBool False
+eval (EOr e1 e2) = do
+  ev1 <- getBool e1
+  if ev1 then return $ VBool True
+  else do
+    ev2 <- getBool e2
+    return $ VBool ev2
 
 -------------- Int section -----------
 eval (EIntLit i) = return $ VInt i
@@ -134,11 +135,7 @@ eval (EIf e1 e2 e3) = do
   if con then eval e2 else eval e3
 
 -------------- Complex section -----------
-eval (ELambda (pn, pt) e) = do
-  c0 <- get
-  case get_app_val c0 of
-    Just val -> return $ VExpr e $ Map.fromList [(pn, val)]
-    _ -> lift Nothing
+eval (ELambda (pn, pt) e) = return $ VLambda pn e $ Map.fromList []
 
 eval (ELet (str, e1) e2) = do
   v1 <- eval e1
@@ -147,7 +144,7 @@ eval (ELet (str, e1) e2) = do
 
 eval (ELetRec f (x, tx) (e1, ty) e2) = do
   c0 <- get
-  put $ add_bind f (VExpr e1 $ Map.fromList [(x, Nil)]) c0
+  put $ add_bind f (VLambda x e1 $ Map.fromList []) c0
   er <- eval e2
   put c0
   return er
@@ -158,13 +155,10 @@ eval (EVar s) = do
 
 eval (EApply e1 e2) = do
   v2 <- eval e2
-  (VExpr exp local_v) <- withApplyVar v2 $ eval e1
-  c0 <- get
-  put $ union_bind local_v c0
-  er <- eval exp
-  put c0
+  (VLambda pn exp lo) <- eval e1
+  er <- withVars (Map.insert pn v2 lo) $ eval exp
   case er of
-    (VExpr new_exp new_local_v) -> return (VExpr new_exp $ Map.union new_local_v local_v)
+    (VLambda npn nexp nlo) -> return (VLambda npn nexp $ Map.union nlo (Map.insert pn v2 lo))
     x -> return x
 
 -- ECase
@@ -206,7 +200,7 @@ aplusb_expr = ELetRec "solution" ("a",TInt) (ELambda ("b",TInt) (EAdd (EVar "a")
 complex_tail = (ELet ("a",EIntLit 1) (ELet ("b",EIntLit 2) (ELet ("c",EIntLit 3) (ELet ("d",EApply (EApply (EVar "solution") (EVar "b")) (EVar "c")) (EApply (EApply (EVar "solution") (EVar "a")) (EVar "d"))))))
 
 evalValueExpr :: Expr -> Maybe (Value, Context)
-evalValueExpr exp = runStateT (eval exp) $ Context { binds = Map.fromList [], appValue = Nil }
+evalValueExpr exp = runStateT (eval exp) $ Context { binds = Map.fromList [] }
 
 -- my_two_lambda_expr = (\x -> \y -> x + y) 3 4
 two_lambda_expr = ELambda ("x", TInt) (ELambda ("y", TInt) (EAdd (EVar "x") (EVar "y")))
@@ -219,7 +213,7 @@ my_two_lambda_expr_2 = EApply (EApply two_lambda_expr_2 (EIntLit 3)) (EIntLit 4)
 
 evalProgram :: Program -> Maybe Value
 evalProgram (Program adts body) = evalStateT (eval body) $
-  Context { binds = Map.fromList [], appValue = Nil } -- 可以用某种方式定义上下文，用于记录变量绑定状态
+  Context { binds = Map.fromList [] } -- 可以用某种方式定义上下文，用于记录变量绑定状态
 
 evalValue :: Program -> Result
 evalValue p = case evalProgram p of
