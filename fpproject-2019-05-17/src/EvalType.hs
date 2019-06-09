@@ -35,6 +35,13 @@ isChar e = do
     TChar -> return TChar
     _ -> lift Nothing
 
+-------- only int and char can order ---------
+isOrd :: Type -> Bool
+isOrd t = case t of
+  TInt -> True
+  TChar -> True
+  _ -> False
+
 -- judge if type if e1 equals to e2, return ContextState t if true
 typeEq :: Expr -> Expr -> ContextState Type
 typeEq e1 e2 = do
@@ -47,7 +54,7 @@ typeComp :: Expr -> Expr -> ContextState Type
 typeComp e1 e2 = do
   et1 <- eval e1
   et2 <- eval e2
-  if et1 == et2 && (et1 /= TBool)
+  if et1 == et2 && (isOrd et1)
     then return et1
     else lift Nothing
 
