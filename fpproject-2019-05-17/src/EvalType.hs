@@ -3,8 +3,12 @@ module EvalType where
 
 import AST
 import Control.Monad.State
--- import qualified Data.Map as Map
 import qualified Data.Map.Strict as Map
+
+---------------------------------- utils --------------------------------------
+
+listEqa :: Eq a => [a] -> a -> Bool
+listEqa xs t = and $ map (== t) xs
 
 ---------------------- store name and type pair in binds ----------------------
 data Context = Context { binds :: Map.Map String Type }
@@ -12,7 +16,7 @@ data Context = Context { binds :: Map.Map String Type }
 
 type ContextState a = StateT Context Maybe a
 
------------------------------- judge is type function --------------------------
+------------------------------ judge is type function -------------------------
 
 isBool :: Expr -> ContextState Type
 isBool e = do
@@ -35,7 +39,7 @@ isChar e = do
     TChar -> return TChar
     _ -> lift Nothing
 
--------- only int and char can order ---------
+-- only int and char can order
 isOrd :: Type -> Bool
 isOrd t = case t of
   TInt -> True
@@ -78,8 +82,57 @@ withVar vn vt a = do
   put c0
   return t1
 
+-- 添加一个adt的一个构造函数
+add_cons_fun :: String -> Map.Map String Type -> (String, [Type]) -> Map.Map String Type
+add_cons_fun datan ms (fun, tys) =
+  let fun_t = foldr (\x -> \y -> TArrow x y) (TData datan) tys in
+  Map.insert fun fun_t ms
+
+-- 添加一个ADT的所有构造函数
+add_adt_funs :: Map.Map String Type -> ADT -> Map.Map String Type
+add_adt_funs ms (ADT name fs) = 
+  foldl (add_cons_fun name) ms fs
+
+-- consume a input pattern type
+consume_type :: ContextState Type -> Pattern -> ContextState Type
+consume_type ct0 pat = do
+  t0 <- ct0
+  case t0 of
+    (TArrow t1 t2) -> do
+      tp <- evalPattern pat
+      if (tp == t1) then return t2
+      else lift Nothing
+    _ -> lift Nothing
+
+-- judge pattern and expr list eq
+pat_type_eq :: Type -> [Pattern] -> ContextState Type
+pat_type_eq t0 [] = return t0
+pat_type_eq t0 (p:ps) = do
+  ty <- evalPattern p
+  if (t0 == ty) then pat_type_eq t0 ps
+  else lift Nothing
+
+-- judge pattern and expr list eq
+exp_type_eq :: Type -> [Expr] -> ContextState Type
+exp_type_eq t0 [] = return t0
+exp_type_eq t0 (e:es) = do
+  ty <- eval e
+  if (t0 == ty) then exp_type_eq t0 es
+  else lift Nothing
+
 ---------------------------------- Evaluate Funtion ---------------------------------
-  
+
+evalPattern :: Pattern -> ContextState Type
+evalPattern (PBoolLit _) = return TBool
+evalPattern (PIntLit _) = return TInt
+evalPattern (PCharLit _) = return TChar
+evalPattern (PVar s) = do
+  c <- get
+  find_bind s c
+evalPattern (PData fun ps) = do
+  c <- get
+  foldl consume_type (find_bind fun c) ps
+
 eval :: Expr -> ContextState Type
 
 -------------- Bool section -----------
@@ -137,9 +190,17 @@ eval (EApply e1 e2) = do
     return tr
   else lift Nothing
 
--- ECase
+eval (ECase e0 []) = lift Nothing
 
-eval _ = undefined
+eval (ECase e0 cases) = do
+  pty0 <- eval e0
+  pat_type_eq pty0 pats
+  ety0 <- eval $ head exps
+  exp_type_eq ety0 $ tail exps
+  where pats = map (\(pat, exp) -> pat) cases
+        exps = map (\(pat, exp) -> exp) cases
+
+-- eval _ = undefined
 
 ---------------------------- some my own test --------------------------------
 
@@ -158,14 +219,19 @@ expr_my_let_rec_bad = EAdd (expr_my_let_rec) (EVar "x")
 expr_my_let = ELet ("x",(EIntLit 3)) (EMod (EVar "x") (EIntLit 2))
 expr_my_let_bad = EAdd expr_my_let (EVar "x")
 
-evalTypeExpr :: Expr -> Maybe (Type, Context)
-evalTypeExpr exp = runStateT (eval exp) $ Context { binds = Map.empty }
+my_adts = [ADT "[int]" [("[]@int",[]),("::@int",[TInt,TData "[int]"])], ADT "[char]" [("[]@char",[]),("::@char",[TChar,TData "[char]"])]]
 
-default_context :: Context
-default_context = Context {binds = Map.fromList []}
+my_context :: Context
+my_context = Context { binds = foldl add_adt_funs Map.empty my_adts }
+
+evalTypeExpr :: Expr -> Maybe (Type, Context)
+evalTypeExpr exp = runStateT (eval exp) $ my_context
 
 -----------------------------------------------------------------------------
 
 evalType :: Program -> Maybe Type
 evalType (Program adts body) = evalStateT (eval body) $
-  Context { binds = Map.fromList [] } -- 可以用某种方式定义上下文，用于记录变量绑定状态
+  -- 添加adt的构造函数到binds中
+  Context { binds = foldl add_adt_funs Map.empty adts }
+
+-- 可以用某种方式定义上下文，用于记录变量绑定状态
