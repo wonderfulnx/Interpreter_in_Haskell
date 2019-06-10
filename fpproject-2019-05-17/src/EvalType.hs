@@ -5,11 +5,6 @@ import AST
 import Control.Monad.State
 import qualified Data.Map.Strict as Map
 
----------------------------------- utils --------------------------------------
-
-listEqa :: Eq a => [a] -> a -> Bool
-listEqa xs t = and $ map (== t) xs
-
 ---------------------- store name and type pair in binds ----------------------
 data Context = Context { binds :: Map.Map String Type }
   deriving (Show, Eq) -- 可以用某种方式定义上下文，用于记录变量绑定状态
@@ -94,47 +89,42 @@ add_adt_funs ms (ADT name fs) =
   foldl (add_cons_fun name) ms fs
 
 -- consume a input pattern type
-consume_type :: ContextState Type -> Pattern -> ContextState Type
-consume_type ct0 pat = do
-  t0 <- ct0
+consume_type :: Type -> Pattern -> ContextState Type
+consume_type t0 pat = do
   case t0 of
     (TArrow t1 t2) -> do
-      tp <- evalPattern pat
-      if (tp == t1) then return t2
-      else lift Nothing
+      evalPattern pat t1
+      return t2
     _ -> lift Nothing
 
--- judge pattern and expr list eq
-pat_type_eq :: Type -> [Pattern] -> ContextState Type
-pat_type_eq t0 [] = return t0
-pat_type_eq t0 (p:ps) = do
-  ty <- evalPattern p
-  if (t0 == ty) then pat_type_eq t0 ps
+---------------------------------- Evaluate Pattern ---------------------------------
+
+-- 计算一个pattern是否满足Type，返回结果
+evalPattern :: Pattern -> Type -> ContextState Type
+evalPattern (PBoolLit _) TBool = return TBool
+evalPattern (PIntLit _) TInt = return TInt
+evalPattern (PCharLit _) TChar = return TChar
+evalPattern (PVar s) ty = do
+  c0 <- get
+  put $ add_bind s ty c0
+  return ty
+evalPattern (PData fun pats) ty = do
+  c0 <- get
+  tfun <- find_bind fun c0
+  tr <- evalP tfun pats
+  if (tr == ty) then return tr
   else lift Nothing
+  where 
+    evalP tp [] = return tp
+    evalP tp (p:ps) = do
+      ts <- consume_type tp p
+      evalP ts ps
 
--- judge pattern and expr list eq
-exp_type_eq :: Type -> [Expr] -> ContextState Type
-exp_type_eq t0 [] = return t0
-exp_type_eq t0 (e:es) = do
-  ty <- eval e
-  if (t0 == ty) then exp_type_eq t0 es
-  else lift Nothing
+evalPattern _ _ = lift Nothing
 
----------------------------------- Evaluate Funtion ---------------------------------
-
-evalPattern :: Pattern -> ContextState Type
-evalPattern (PBoolLit _) = return TBool
-evalPattern (PIntLit _) = return TInt
-evalPattern (PCharLit _) = return TChar
-evalPattern (PVar s) = do
-  c <- get
-  find_bind s c
-evalPattern (PData fun ps) = do
-  c <- get
-  foldl consume_type (find_bind fun c) ps
+---------------------------------- Evaluate Expr ---------------------------------
 
 eval :: Expr -> ContextState Type
-
 -------------- Bool section -----------
 eval (EBoolLit _) = return TBool
 eval (ENot e) = isBool e
@@ -191,16 +181,21 @@ eval (EApply e1 e2) = do
   else lift Nothing
 
 eval (ECase e0 []) = lift Nothing
-
-eval (ECase e0 cases) = do
-  pty0 <- eval e0
-  pat_type_eq pty0 pats
-  ety0 <- eval $ head exps
-  exp_type_eq ety0 $ tail exps
-  where pats = map (\(pat, exp) -> pat) cases
-        exps = map (\(pat, exp) -> exp) cases
-
--- eval _ = undefined
+eval (ECase e0 ((pat, exp):cas)) = do
+  t0 <- eval e0
+  c0 <- get
+  evalPattern pat t0
+  t1 <- eval exp
+  put c0
+  evalPE t0 t1 cas
+  where
+    evalPE pt et [] = return et
+    evalPE pt et ((p, e):cs) = do
+      c0 <- get
+      evalPattern p pt
+      expt <- eval e
+      if (et == expt) then evalPE pt et cs
+      else lift Nothing
 
 ---------------------------- some my own test --------------------------------
 
