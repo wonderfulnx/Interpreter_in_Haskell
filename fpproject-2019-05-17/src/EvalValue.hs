@@ -10,18 +10,16 @@ data Value
   = VBool Bool
   | VInt Int
   | VChar Char
-  -- VLambda 表示一个Lambda表达式，String保存其参数，Mapping保存局部变量(已知)
+  -- VLambda 表示一个Lambda表达式
+    -- String保存其参数
+    -- Mapping保存局部变量(已知)
   | VLambda String Expr (Map.Map String Value)
   -- VCons 表示一个构造函数
-    -- String保存其对应的代数数据类型名
+    -- String1 保存其对应的代数数据类型名
+    -- String2 保存其对应的构造函数名
     -- [Value]保存已经给定的参数值
     -- Int保存其需要的参数个数
-  | VCons String [Value] Int
-  -- VData 表示一个代数数据类型S
-    -- String保存其对应的代数数据类型名
-    -- [Value]保存其中的值
-    -- 实际为VCons的特例
-  -- | VData String [Value]
+  | VCons String String [Value] Int
   deriving (Show, Eq)
 
 instance Ord Value where
@@ -104,7 +102,7 @@ withVars ms a = do
 -- 添加一个adt的一个构造函数
 add_cons_fun :: String -> Map.Map String Value -> (String, [Type]) -> Map.Map String Value
 add_cons_fun datan ms (fun, tys) = 
-  let fun_v = VCons fun [] $ length tys in
+  let fun_v = VCons datan fun [] $ length tys in
     Map.insert fun fun_v ms
 
 -- 添加一个ADT的所有构造函数
@@ -113,19 +111,6 @@ add_adt_funs ms (ADT name fs) =
   foldl (add_cons_fun name) ms fs
 
 ---------------------------------- Evaluate Pattern ---------------------------------
-
--- patternEq :: Value -> Value -> Bool
--- patternEq v1 v2 = case v1 of
---   (VInt _) -> v1 == v2
---   (VChar _) -> v1 == v2
---   (VBool _) -> v1 == v2
---   (VLambda _) -> v1 == v2
---   (VCons s1 l1 v1) -> case v2 of
---     (VCons s2 l2 v2) -> s1 == s2 && v1 == v2
---     _ -> False
---   (VData s1 l1) -> case v2 of
---     (VData s2 l2) -> s1 == s2
---     _ -> False
 
 -- 计算一个pattern，由外界给定值，返回是否匹配
 evalPattern :: Pattern -> Value -> ContextState Bool
@@ -142,10 +127,11 @@ evalPattern (PVar s) val = do
   c0 <- get
   put $ add_bind s val c0
   return True
-evalPattern (PData fun pats) (VCons in_datan in_vals 0) = do
+evalPattern (PData fun pats) (VCons in_datan in_funn in_vals 0) = do
   c0 <- get
-  (VCons datan [] paran) <- find_bind fun c0
+  (VCons datan funn [] paran) <- find_bind fun c0
   if (paran /= length pats || in_datan /= datan) then lift Nothing
+  else if (in_funn /= funn) then return False
   else evalP pats $ reverse in_vals
   where
     -- evalP 接受in_vals和pats具体进行匹配
@@ -154,6 +140,7 @@ evalPattern (PData fun pats) (VCons in_datan in_vals 0) = do
       br <- evalPattern p v
       if br then evalP ps vs
       else return False
+    evalP _ _ = lift Nothing
 
 evalPattern _ _ = lift Nothing
 
@@ -219,16 +206,33 @@ eval (EVar s) = do
 
 eval (EApply e1 e2) = do
   v2 <- eval e2
-  (VLambda pn exp lo) <- eval e1
-  er <- withVars (Map.insert pn v2 lo) $ eval exp
-  case er of
-    (VLambda npn nexp nlo) -> return (VLambda npn nexp $ Map.union nlo (Map.insert pn v2 lo))
-    x -> return x
+  v1 <- eval e1
+  case v1 of
+    (VLambda pn exp lo) -> do
+      er <- withVars (Map.insert pn v2 lo) $ eval exp
+      case er of
+        (VLambda npn nexp nlo) -> return (VLambda npn nexp $ Map.union nlo (Map.insert pn v2 lo))
+        x -> return x
+    (VCons datan funn vs n) -> do
+      if n == 0 then lift Nothing
+      else return (VCons datan funn (v2:vs) (n - 1))
 
--- ECase
-
-eval _ = undefined
-
+eval (ECase e0 []) = lift Nothing
+eval (ECase e0 cs) = do
+  v0 <- eval e0
+  evalPE v0 cs
+  where
+    evalPE v0 [] = lift Nothing
+    evalPE v0 ((pat, exp):cas) = do
+      c0 <- get
+      b0 <- evalPattern pat v0
+      if b0 then do
+        v1 <- eval exp
+        put c0
+        return v1
+      else do
+        put c0
+        evalPE v0 cas
 
 ---------------------------- some my own test --------------------------------
 
@@ -263,7 +267,10 @@ aplusb_expr = ELetRec "solution" ("a",TInt) (ELambda ("b",TInt) (EAdd (EVar "a")
 
 complex_tail = (ELet ("a",EIntLit 1) (ELet ("b",EIntLit 2) (ELet ("c",EIntLit 3) (ELet ("d",EApply (EApply (EVar "solution") (EVar "b")) (EVar "c")) (EApply (EApply (EVar "solution") (EVar "a")) (EVar "d"))))))
 
-my_adts = [ADT "[int]" [("[]@int",[]),("::@int",[TInt,TData "[int]"])], ADT "[char]" [("[]@char",[]),("::@char",[TChar,TData "[char]"])]]
+my_adts = [ADT "[int]" [("[]@int",[]),("::@int",[TInt,TData "[int]"])]]
+my_list_exp = EApply (EApply (EVar "::@int") (EIntLit 1)) (EApply (EApply (EVar "::@int") (EIntLit 2)) (EApply (EApply (EVar "::@int") (EIntLit 3)) (EVar "[]@int")))
+
+my_case_exp = ELet ("xs",my_list_exp) (ECase (EVar "xs") [(PData "[]@int" [],EBoolLit False),(PData "::@int" [PIntLit 1,PData "::@int" [PIntLit 2,PData "[]@int" []]],EBoolLit False),(PData "::@int" [PIntLit 1,PData "::@int" [PIntLit 2,PData "::@int" [PIntLit 3,PData "[]@int" []]]],EBoolLit True),(PVar "_",EBoolLit False)])
 
 evalValueExpr :: Expr -> Maybe (Value, Context)
 evalValueExpr exp = runStateT (eval exp) $ Context { binds = foldl add_adt_funs Map.empty my_adts }
