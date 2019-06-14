@@ -51,8 +51,8 @@ identifier = (lexeme . try) (p >>= check)
                 then fail $ "keyword " ++ show x ++ " cannot be an identifier"
                 else return x
 
-myParser :: Parser Expr
-myParser = between sc eof expParser
+naiveHsParser :: Parser Expr
+naiveHsParser = between sc eof expParser
 
 expParser :: Parser Expr
 expParser = makeExprParser expTerms expOperators

@@ -1,4 +1,5 @@
 module Main where
+import AST
 import Parser
 import Text.Megaparsec
 import System.Console.Repline
@@ -6,20 +7,28 @@ import Control.Monad
 import Control.Monad.IO.Class
 import System.Environment
 import System.IO
+import EvalType(evalType)
+import EvalValue(evalValue)
 
 type Repl a = HaskelineT IO a
 
-cmd :: String -> Repl ()
-cmd input = liftIO $ print input
+cmdEval :: String -> Repl ()
+cmdEval input = do
+  case parse naiveHsParser "" input of
+    Left bundle -> liftIO $ putStr (errorBundlePretty bundle)
+    Right body -> do
+      case evalType (Program [] body) of
+        Nothing -> liftIO $ putStrLn "Type Check Failed!"
+        Just _ -> liftIO $ print $ evalValue (Program [] body)
 
 cmdParse :: String -> Repl ()
-cmdParse s = liftIO $ parseTest myParser s
+cmdParse s = liftIO $ parseTest naiveHsParser s
 
 -- init message of repl
 iniParse :: Repl ()
-iniParse = liftIO $ putStrLn "Welcome to Naive Parser!"
+iniParse = liftIO $ putStrLn "Welcome to NaiveHS Parser!"
 iniEval :: Repl ()
-iniEval = liftIO $ putStrLn "Welcome to Naive Evaluation!"
+iniEval = liftIO $ putStrLn "Welcome to NaiveHs!"
 
 -- repl function quit
 quit :: [String] -> Repl ()
@@ -37,7 +46,7 @@ replParse :: IO ()
 replParse = evalRepl (pure "*Parse> ") cmdParse options (Just ':') (Word completer) iniParse
 
 replEval :: IO ()
-replEval = evalRepl (pure "*Eval> ") cmd options (Just ':') (Word completer) iniEval
+replEval = evalRepl (pure "*Eval> ") cmdEval options (Just ':') (Word completer) iniEval
 
 
 main :: IO ()
