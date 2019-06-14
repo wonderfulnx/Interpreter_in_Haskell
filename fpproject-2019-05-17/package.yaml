@@ -26,6 +26,8 @@ dependencies:
 - containers
 - tasty
 - tasty-hunit
+- parser-combinators
+- megaparsec
 
 library:
   source-dirs: src
