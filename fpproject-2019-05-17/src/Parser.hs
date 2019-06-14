@@ -20,6 +20,8 @@ sc = L.space space1 lineCmnt empty
   where
     lineCmnt  = L.skipLineComment "#"
 
+------------------------------------------ lexer ---------------------------------------
+
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
 
@@ -51,8 +53,36 @@ identifier = (lexeme . try) (p >>= check)
                 then fail $ "keyword " ++ show x ++ " cannot be an identifier"
                 else return x
 
+------------------------------------- Main parser -----------------------------------
+
 naiveHsParser :: Parser Expr
 naiveHsParser = between sc eof expParser
+
+stmtNaiveHsParser :: Parser Stmt
+stmtNaiveHsParser = between sc eof stmtParser
+
+------------------------------------- Parsers -----------------------------------
+
+-- Statement relevant
+data Stmt
+  = SExpr Expr
+  | SAssi String Expr
+
+stmtParser :: Parser Stmt
+stmtParser = assignParser
+  <|> stmtExpParser
+
+stmtExpParser :: Parser Stmt
+stmtExpParser = do
+  exp <- expParser
+  return $ SExpr exp
+
+assignParser :: Parser Stmt
+assignParser = do
+  name <- identifier
+  symbol "="
+  exp <- expParser
+  return $ SAssi name exp
 
 expParser :: Parser Expr
 expParser = makeExprParser expTerms expOperators
