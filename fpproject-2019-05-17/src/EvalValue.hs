@@ -300,6 +300,8 @@ three_lambda_expr =
       )
     ) (EIntLit 1)) (EIntLit 3)
 
+evalValueWith :: Expr -> Context -> Maybe Value
+evalValueWith exp ctx = evalStateT (eval exp) ctx
 
 -----------------------------------------------------------------------------
 

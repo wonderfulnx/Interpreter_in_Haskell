@@ -222,6 +222,9 @@ my_context = Context { binds = foldl add_adt_funs Map.empty my_adts }
 evalTypeExpr :: Expr -> Maybe (Type, Context)
 evalTypeExpr exp = runStateT (eval exp) $ my_context
 
+evalTypeWith :: Expr -> Context -> Maybe Type
+evalTypeWith exp ctx = evalStateT (eval exp) ctx
+
 -----------------------------------------------------------------------------
 
 evalType :: Program -> Maybe Type

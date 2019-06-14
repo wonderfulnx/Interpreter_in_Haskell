@@ -69,7 +69,7 @@ data Stmt
   | SAssi String Expr
 
 stmtParser :: Parser Stmt
-stmtParser = assignParser
+stmtParser = try assignParser
   <|> stmtExpParser
 
 stmtExpParser :: Parser Stmt
