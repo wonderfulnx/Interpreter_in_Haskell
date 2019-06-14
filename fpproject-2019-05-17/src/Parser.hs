@@ -13,7 +13,7 @@ type Parser = Parsec Void String
 
 -- list of reserved words
 keywords :: [String]
-keywords = ["if","then","else","true","false","not","mod","let","def","in"]
+keywords = ["if","then","else","true","false","not","mod","let","def","in","bool","int","char"]
 
 sc :: Parser ()
 sc = L.space space1 lineCmnt empty
@@ -31,14 +31,17 @@ parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
 -- | 'integer' parses an integer.
-integer :: Parser Int
-integer = lexeme L.decimal
+intLit :: Parser Int
+intLit = lexeme L.decimal
 
-char :: Parser Char
-char = between (char '\'') (char '\'') L.charLiteral
+charLit :: Parser Char
+charLit = lexeme $ between (char '\'') (char '\'') L.charLiteral
 
-parseWord :: String -> Parser ()
-parseWord s = (lexeme . try) (string s *> notFollowedBy alphaNumChar)
+parseNfb :: String -> Char -> Parser ()
+parseNfb s c = (lexeme . try) (string s *> notFollowedBy (char c))
+
+word :: String -> Parser ()
+word s = (lexeme . try) (string s *> notFollowedBy alphaNumChar)
 
 identifier :: Parser String
 identifier = (lexeme . try) (p >>= check)
@@ -52,32 +55,112 @@ myParser :: Parser Expr
 myParser = between sc eof expParser
 
 expParser :: Parser Expr
-expParser = makeExprParser Terms Operators
+expParser = makeExprParser expTerms expOperators
+  <|> ifExpr
+  <|> lambdaExpr
+  <|> letExpr
+  <|> defExpr
+  <|> parens expParser
 
-Terms :: Parser Expr
-Terms = parens expParser
-  <|> (EBoolLit True <$ parseWord "true")
-  <|> (EBoolLit False <$ parseWord "false")
-  <|> (EIntLit <$> integer)
-  <|> (ECharLit <$> char)
+expTerms :: Parser Expr
+expTerms = parens expParser
+  <|> (EBoolLit True <$ word "true")
+  <|> (EBoolLit False <$ word "false")
+  <|> (EIntLit <$> intLit)
+  <|> (ECharLit <$> charLit)
   <|> (EVar <$> identifier)
 
--- calParser :: Parser Expr
--- calParser = makeExprParser calTerm calOperators
+expNegate :: Expr -> Expr
+expNegate (EIntLit x) = EIntLit $ negate x
+expNegate x = ESub (EIntLit 0) x
 
--- calTerm :: Parser Expr
--- calTerm = parens calParser
---   <|> EIntLit <$> integer
+expOperators :: [[Operator Parser Expr]]
+expOperators = 
+  [
+    [
+      InfixL (EApply <$ symbol "$")
+    ],
+    [
+      Prefix (expNegate <$ symbol "-"),
+      Prefix (ENot <$ symbol "!")
+    ],
+    [
+      InfixL (EMul <$ symbol "*"),
+      InfixL (EDiv <$ parseNfb "/" '='),
+      InfixL (EMod <$ symbol "%"),
+      InfixL (EAnd <$ symbol "&&"),
+      InfixL (EOr <$ symbol "||")
+    ],
+    [
+      InfixL (EAdd <$ symbol "+"),
+      InfixL (ESub <$ symbol "-") 
+    ],
+    [
+      InfixL (EEq <$ symbol "=="),
+      InfixL (ENeq <$ symbol "/="),
+      InfixL (ELe <$ symbol "<="),
+      InfixL (EGe <$ symbol ">="),
+      InfixL (ELt <$ symbol "<"),
+      InfixL (EGt <$ symbol ">")
+    ]
+  ]
 
--- calOperators :: [[Operator Parser Expr]]
--- calOperators =
---   [ [Prefix (ESub (EIntLit 0) <$ symbol "-") ]
---   , [ InfixL (EMul <$ symbol "*")
---     , InfixL (EDiv <$ symbol "/")
---     , InfixL (EMod <$ symbol "/") ]
---   , [ InfixL (EAdd <$ symbol "+")
---     , InfixL (ESub <$ symbol "-") ]
---   ]
+ifExpr :: Parser Expr
+ifExpr = do
+  word "if"
+  cond <- expParser
+  word "then"
+  exp1 <- expParser
+  word "else"
+  exp2 <- expParser
+  return (EIf cond exp1 exp2)
 
--- TestPar :: String -> IO ()
--- TestPar = parseTest myParser
+lambdaExpr :: Parser Expr
+lambdaExpr = do
+  symbol "\\"
+  name <- identifier
+  symbol ":"
+  t <- parens typeParser
+  symbol "->"
+  exp <- expParser
+  return (ELambda (name, t) exp)
+
+letExpr :: Parser Expr
+letExpr = do
+  word "let"
+  name <- identifier
+  symbol "="
+  exp1 <- expParser
+  word "in"
+  exp2 <- expParser
+  return (ELet (name, exp1) exp2)
+
+defExpr :: Parser Expr
+defExpr = do
+  word "def"
+  f <- identifier
+  symbol ":"
+  ty <- parens typeParser
+  symbol "="
+  (ELambda (x, tx) e1) <- expParser
+  word "in"
+  e2 <- expParser
+  return (ELetRec f (x, tx) (e1, ty) e2)
+
+typeParser :: Parser Type
+typeParser = makeExprParser typeTerms typeOperators
+  <|> parens typeParser
+
+typeTerms :: Parser Type
+typeTerms = parens typeParser
+  <|> (TBool <$ word "bool")
+  <|> (TInt <$ word "int")
+  <|> (TInt <$ word "char")
+
+typeOperators :: [[Operator Parser Type]]
+typeOperators = 
+  [
+    [
+      InfixL (TArrow <$ symbol "->")
+    ]
+  ]

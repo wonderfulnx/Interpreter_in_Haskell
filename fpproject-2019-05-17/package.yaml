@@ -28,6 +28,7 @@ dependencies:
 - tasty-hunit
 - parser-combinators
 - megaparsec
+- repline
 
 library:
   source-dirs: src

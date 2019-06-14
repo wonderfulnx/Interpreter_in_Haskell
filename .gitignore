@@ -24,3 +24,5 @@ cabal.project.local~
 # macOS
 **/.DS_Store
 
+# repline
+**/.history
