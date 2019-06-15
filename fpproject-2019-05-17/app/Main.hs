@@ -79,7 +79,7 @@ getType xs = do
       ctx <- get
       case ET.evalTypeWith body $ type_ctx ctx of
         Nothing -> liftIO $ putStrLn "Type Check Failed!"
-        Just tr -> liftIO $ print tr
+        Just tr -> liftIO $ putStrLn $ showType tr
 
 options :: [(String, [String] -> Repl ())]
 options = [ ("quit", quit) ]
@@ -102,6 +102,12 @@ getResult val = case val of
   Just (EV.VInt i) -> RInt i
   Just (EV.VChar c) -> RChar c
   _ -> RInvalid
+
+showType :: Type -> String
+showType TBool = "Bool"
+showType TInt = "Int"
+showType TChar = "Char"
+showType (TArrow a b) = "(" ++ showType a ++ " -> " ++ showType b ++ ")"
 
 main :: IO ()
 main = do 
