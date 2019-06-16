@@ -118,20 +118,20 @@ expOperators =
       InfixL (EMul <$ symbol "*"),
       InfixL (EDiv <$ parseNfb "/" '='),
       InfixL (EMod <$ symbol "%"),
-      InfixL (EAnd <$ symbol "&&"),
-      InfixL (EOr <$ symbol "||")
+      InfixR (EAnd <$ symbol "&&"),
+      InfixR (EOr <$ symbol "||")
     ],
     [
       InfixL (EAdd <$ symbol "+"),
       InfixL (ESub <$ symbol "-") 
     ],
     [
-      InfixL (EEq <$ symbol "=="),
-      InfixL (ENeq <$ symbol "/="),
-      InfixL (ELe <$ symbol "<="),
-      InfixL (EGe <$ symbol ">="),
-      InfixL (ELt <$ symbol "<"),
-      InfixL (EGt <$ symbol ">")
+      InfixN (EEq <$ symbol "=="),
+      InfixN (ENeq <$ symbol "/="),
+      InfixN (ELe <$ symbol "<="),
+      InfixN (EGe <$ symbol ">="),
+      InfixN (ELt <$ symbol "<"),
+      InfixN (EGt <$ symbol ">")
     ]
   ]
 
@@ -191,6 +191,6 @@ typeOperators :: [[Operator Parser Type]]
 typeOperators = 
   [
     [
-      InfixL (TArrow <$ symbol "->")
+      InfixR (TArrow <$ symbol "->")
     ]
   ]

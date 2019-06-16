@@ -295,12 +295,12 @@ complex =
     },
     Example {
       name = "08_apply",
-      expr = "def sum3: (int -> (int -> int)) = \\x1:(int)->\\x2:(int)->\\x3:(int)->x1 + x2 + x3 in sum3 $ 1 $ 1 $ 1 $ 1",
+      expr = "def sum3: (int -> int -> int) = \\x1:(int)->\\x2:(int)->\\x3:(int)->x1 + x2 + x3 in sum3 $ 1 $ 1 $ 1 $ 1",
       tree = ELetRec "sum3" ("x1",TInt) (ELambda ("x2",TInt) (ELambda ("x3",TInt) (EAdd (EAdd (EVar "x1") (EVar "x2")) (EVar "x3"))),TArrow TInt (TArrow TInt TInt)) (EApply (EApply (EApply (EApply (EVar "sum3") (EIntLit 1)) (EIntLit 1)) (EIntLit 1)) (EIntLit 1))
     },
     Example {
       name = "09_apply",
-      expr = "def sum3: (int -> (int -> int)) = \\x1:(int)->\\x2:(int)->\\x3:(int)->x1 + x2 + x3 in let f = sum3 $ 1 $ 1 in f $ 1",
+      expr = "def sum3: (int -> int -> int) = \\x1:(int)->\\x2:(int)->\\x3:(int)->x1 + x2 + x3 in let f = sum3 $ 1 $ 1 in f $ 1",
       tree = ELetRec "sum3" ("x1",TInt) (ELambda ("x2",TInt) (ELambda ("x3",TInt) (EAdd (EAdd (EVar "x1") (EVar "x2")) (EVar "x3"))),TArrow TInt (TArrow TInt TInt)) (ELet ("f",EApply (EApply (EVar "sum3") (EIntLit 1)) (EIntLit 1)) (EApply (EVar "f") (EIntLit 1)))
     }
   ]
