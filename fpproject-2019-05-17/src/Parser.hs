@@ -1,4 +1,6 @@
--- 
+-- | 此文件提供Parser功能，将输入字符串解析为一个AST
+-- | 
+-- | 
 module Parser where
 
 import AST
@@ -15,6 +17,7 @@ type Parser = Parsec Void String
 keywords :: [String]
 keywords = ["if","then","else","true","false","not","mod","let","def","in","bool","int","char"]
 
+-- line comment begin with #
 sc :: Parser ()
 sc = L.space space1 lineCmnt empty
   where
@@ -32,16 +35,19 @@ symbol = L.symbol sc
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
--- | 'integer' parses an integer.
+-- | parses an integer.
 intLit :: Parser Int
 intLit = lexeme L.decimal
 
+-- | parses a character.
 charLit :: Parser Char
 charLit = lexeme $ between (char '\'') (char '\'') L.charLiteral
 
+-- | parse a string not followed by a char
 parseNfb :: String -> Char -> Parser ()
 parseNfb s c = (lexeme . try) (string s *> notFollowedBy (char c))
 
+-- | parse a keyword
 word :: String -> Parser ()
 word s = (lexeme . try) (string s *> notFollowedBy alphaNumChar)
 
@@ -55,45 +61,47 @@ identifier = (lexeme . try) (p >>= check)
 
 ------------------------------------- Main parser -----------------------------------
 
-naiveHsParser :: Parser Expr
-naiveHsParser = between sc eof expParser
+exprParser :: Parser Expr
+exprParser = between sc eof exprParser'
 
-stmtNaiveHsParser :: Parser Stmt
-stmtNaiveHsParser = between sc eof stmtParser
+stmtParser :: Parser Stmt
+stmtParser = between sc eof stmtParser'
 
-------------------------------------- Parsers -----------------------------------
+-------------------------------------------------------------------------------------
 
--- Statement relevant
+--------------------- Statement Parsers -------------------
 data Stmt
   = SExpr Expr
   | SAssi String Expr
 
-stmtParser :: Parser Stmt
-stmtParser = try assignParser
+stmtParser' :: Parser Stmt
+stmtParser' = try assignParser
   <|> stmtExpParser
 
 stmtExpParser :: Parser Stmt
 stmtExpParser = do
-  exp <- expParser
+  exp <- exprParser'
   return $ SExpr exp
 
 assignParser :: Parser Stmt
 assignParser = do
   name <- identifier
   symbol "="
-  exp <- expParser
+  exp <- exprParser'
   return $ SAssi name exp
 
-expParser :: Parser Expr
-expParser = makeExprParser expTerms expOperators
+--------------------- Expr Parsers -------------------------
+
+exprParser' :: Parser Expr
+exprParser' = makeExprParser expTerms expOperators
   <|> ifExpr
   <|> lambdaExpr
   <|> letExpr
   <|> defExpr
-  <|> parens expParser
+  <|> parens exprParser'
 
 expTerms :: Parser Expr
-expTerms = parens expParser
+expTerms = parens exprParser'
   <|> (EBoolLit True <$ word "true")
   <|> (EBoolLit False <$ word "false")
   <|> (EIntLit <$> intLit)
@@ -138,11 +146,11 @@ expOperators =
 ifExpr :: Parser Expr
 ifExpr = do
   word "if"
-  cond <- expParser
+  cond <- exprParser'
   word "then"
-  exp1 <- expParser
+  exp1 <- exprParser'
   word "else"
-  exp2 <- expParser
+  exp2 <- exprParser'
   return (EIf cond exp1 exp2)
 
 lambdaExpr :: Parser Expr
@@ -152,7 +160,7 @@ lambdaExpr = do
   symbol ":"
   t <- parens typeParser
   symbol "->"
-  exp <- expParser
+  exp <- exprParser'
   return (ELambda (name, t) exp)
 
 letExpr :: Parser Expr
@@ -160,9 +168,9 @@ letExpr = do
   word "let"
   name <- identifier
   symbol "="
-  exp1 <- expParser
+  exp1 <- exprParser'
   word "in"
-  exp2 <- expParser
+  exp2 <- exprParser'
   return (ELet (name, exp1) exp2)
 
 defExpr :: Parser Expr
@@ -172,10 +180,12 @@ defExpr = do
   symbol ":"
   ty <- parens typeParser
   symbol "="
-  (ELambda (x, tx) e1) <- expParser
+  (ELambda (x, tx) e1) <- exprParser'
   word "in"
-  e2 <- expParser
+  e2 <- exprParser'
   return (ELetRec f (x, tx) (e1, ty) e2)
+
+--------------------- Type Parsers -------------------
 
 typeParser :: Parser Type
 typeParser = makeExprParser typeTerms typeOperators

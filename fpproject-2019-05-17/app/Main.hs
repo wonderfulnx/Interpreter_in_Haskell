@@ -38,13 +38,15 @@ value_ctx Context { bindsT = t0, bindsV = v0} =
 type StateRepl a = HaskelineT (StateT Context IO) a
 type Repl a = HaskelineT IO a
 
+----------------------------- cli command functions -------------------------------
+
 cmdParse :: String -> Repl ()
-cmdParse s = liftIO $ parseTest naiveHsParser s
+cmdParse s = liftIO $ parseTest exprParser s
 
 cmdEval :: String -> StateRepl ()
 cmdEval input = do
   ctx <- get
-  case parse stmtNaiveHsParser "" input of
+  case parse stmtParser "" input of
     Left bundle -> liftIO $ putStr (errorBundlePretty bundle)
     Right (SExpr body) -> do
       case ET.evalTypeWith body $ type_ctx ctx of
@@ -58,22 +60,12 @@ cmdEval input = do
             Nothing -> liftIO $ print RInvalid
             Just val -> put $ add_bind str tr val ctx
 
-
--- init message of repl
-iniParse :: Repl ()
-iniParse = liftIO $ putStrLn "Welcome to NaiveHS Parser!"
-iniEval :: StateRepl ()
-iniEval = liftIO $ putStrLn "Welcome to NaiveHs!"
-
-quit :: [String] -> Repl ()
-quit _ = abort
-quitState :: [String] -> StateRepl ()
-quitState _ = abort
+----------------------------------------------------------------------
 
 getType :: [String] -> StateRepl ()
 getType [] = liftIO $ putStrLn "No argument input!"
 getType xs = do
-  case parse naiveHsParser "" $ intercalate " " xs of
+  case parse exprParser "" $ intercalate " " xs of
     Left bundle -> liftIO $ putStr (errorBundlePretty bundle)
     Right body -> do
       ctx <- get
@@ -81,10 +73,31 @@ getType xs = do
         Nothing -> liftIO $ putStrLn "Type Check Failed!"
         Just tr -> liftIO $ putStrLn $ showType tr
 
+showType :: Type -> String
+showType TBool = "Bool"
+showType TInt = "Int"
+showType TChar = "Char"
+showType (TArrow a b) = "(" ++ showType a ++ " -> " ++ showType b ++ ")"
+
+getResult :: Maybe EV.Value -> Result
+getResult val = case val of
+  Just (EV.VBool b) -> RBool b
+  Just (EV.VInt i) -> RInt i
+  Just (EV.VChar c) -> RChar c
+  _ -> RInvalid
+
+------------------------------------- CLI funtions -------------------------------
+
+-- |init message of repl
+iniParse :: Repl ()
+iniParse = liftIO $ putStrLn "Welcome to NaiveHS Parser!"
+iniEval :: StateRepl ()
+iniEval = liftIO $ putStrLn "Welcome to NaiveHs!"
+
 options :: [(String, [String] -> Repl ())]
-options = [ ("quit", quit) ]
+options = [ ("quit", \_ -> abort) ]
 optionsState :: [(String, [String] -> StateRepl ())]
-optionsState = [ ("quit", quitState), ("type", getType) ]
+optionsState = [ ("quit", \_ -> abort), ("type", getType) ]
 
 completer :: Monad m => WordCompleter m
 completer n = return []
@@ -96,18 +109,7 @@ replEval = evalStateT
   (evalRepl (pure "*Eval> ") cmdEval optionsState (Just ':') (Word completer) iniEval)
   $ Context { bindsT = Map.empty, bindsV = Map.empty }
 
-getResult :: Maybe EV.Value -> Result
-getResult val = case val of
-  Just (EV.VBool b) -> RBool b
-  Just (EV.VInt i) -> RInt i
-  Just (EV.VChar c) -> RChar c
-  _ -> RInvalid
-
-showType :: Type -> String
-showType TBool = "Bool"
-showType TInt = "Int"
-showType TChar = "Char"
-showType (TArrow a b) = "(" ++ showType a ++ " -> " ++ showType b ++ ")"
+-----------------------------------------------------------------------------------
 
 main :: IO ()
 main = do 
@@ -116,7 +118,7 @@ main = do
     help
   else if head args == "parse" then
     replParse
-  else if head args == "eval" then
+  else if head args == "repl" then
     replEval
   else
     help
@@ -126,4 +128,4 @@ main = do
       putStrLn ""
       putStrLn "Available commands:"
       putStrLn "  parse         REPL of parsing the input."
-      putStrLn "  eval          REPL of evaluating the input."
+      putStrLn "  repl          REPL of evaluating the input."

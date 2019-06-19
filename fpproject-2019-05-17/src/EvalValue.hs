@@ -234,81 +234,17 @@ eval (ECase e0 cs) = do
         put c0
         evalPE v0 cas
 
----------------------------- some my own test --------------------------------
+-----------------------------------------------------------------------------
 
--- True == False
-eq_false = EEq (EBoolLit True) (EBoolLit False)
--- 5 < 6
-lt_true = ELt (EIntLit 5) (EIntLit 6)
--- True < False
-lt_wrong_1 = ELt (EBoolLit True) (EBoolLit False)
--- 7 < 'm'
-lt_wrong_2 = ELt (EIntLit 7) (ECharLit 'm')
-
--- \x -> x + 1
-my_lambda_expr = ELambda ("x", TInt) (EAdd (EVar "x") (EIntLit 1))
--- (\x -> x + 1) 2
-my_apply_expr = EApply my_lambda_expr (EIntLit 2)
-
--- (\x -> \x -> x + 1) 3 4   // in haskell should be 5
-my_lambda_expr_2 = ELambda ("x", TInt) my_lambda_expr
-my_apply_expr_2 = EApply (EApply my_lambda_expr_2 (EIntLit 3)) (EIntLit 100)
-
--- my_let_expr_0 = (let x = 3 in x `mod` 2)
-my_let_expr_0 = ELet ("x",(EIntLit 3)) (EMod (EVar "x") (EIntLit 2))
--- my_let_expr_0 + x （x是上一个式子中的变量，这里应该类型未知）
-my_let_expr_bad_0 = EAdd my_let_expr_0 (EVar "x")
-
--- aplus1_expr = let f = \x -> x + 1 in f 2
-aplus1_expr = ELetRec "f" ("a",TInt) ((EAdd (EVar "a") (EIntLit 1)), TArrow TInt TInt) (EApply (EVar "f") (EIntLit 2))
-
--- let solution = \a -> \b -> a + b in ...
-aplusb_expr = ELetRec "solution" ("a",TInt) (ELambda ("b",TInt) (EAdd (EVar "a") (EVar "b")),TArrow TInt TInt) (EApply (EApply (EVar "solution") (EIntLit 1)) (EIntLit 2))
-
-complex_tail = (ELet ("a",EIntLit 1) (ELet ("b",EIntLit 2) (ELet ("c",EIntLit 3) (ELet ("d",EApply (EApply (EVar "solution") (EVar "b")) (EVar "c")) (EApply (EApply (EVar "solution") (EVar "a")) (EVar "d"))))))
-
-my_adts = [ADT "[int]" [("[]@int",[]),("::@int",[TInt,TData "[int]"])]]
-my_list_exp = EApply (EApply (EVar "::@int") (EIntLit 1)) (EApply (EApply (EVar "::@int") (EIntLit 2)) (EApply (EApply (EVar "::@int") (EIntLit 3)) (EVar "[]@int")))
-
-my_case_exp = ELet ("xs",my_list_exp) (ECase (EVar "xs") [(PData "[]@int" [],EBoolLit False),(PData "::@int" [PIntLit 1,PData "::@int" [PIntLit 2,PData "[]@int" []]],EBoolLit False),(PData "::@int" [PIntLit 1,PData "::@int" [PIntLit 2,PData "::@int" [PIntLit 3,PData "[]@int" []]]],EBoolLit True),(PVar "_",EBoolLit False)])
-
-evalValueExpr :: Expr -> Maybe (Value, Context)
-evalValueExpr exp = runStateT (eval exp) $ Context { binds = foldl add_adt_funs Map.empty my_adts }
-
--- my_two_lambda_expr = (\x -> \y -> x + y) 3 4
-two_lambda_expr = ELambda ("x", TInt) (ELambda ("y", TInt) (EAdd (EVar "x") (EVar "y")))
-my_two_lambda_expr = EApply (EApply two_lambda_expr (EIntLit 3)) (EIntLit 4)
--- 很极端情况：(\x -> \x -> x + x) 1 2
-two_lambda_expr_2 = ELambda ("x", TInt) (ELambda ("x", TInt) (EAdd (EVar "x") (EVar "x")))
-my_two_lambda_expr_2 = EApply (EApply two_lambda_expr_2 (EIntLit 3)) (EIntLit 4)
-
--- 中间类型的lambda
-my_two_lambda_expr_3 = EApply two_lambda_expr (EIntLit 3)
-
--- 一个复杂测例
-three_lambda_expr_part1 = 
-  ELambda ("y", TInt) (
-    ELambda ("z", TInt) (
-      EAdd (EVar "x") (EAdd (EVar "y") (EVar "z"))
-    )
-  )
-three_lambda_expr =
-  EApply (
-    EApply (
-      ELambda ("x", TInt) (
-        EApply three_lambda_expr_part1 (EIntLit 2)
-      )
-    ) (EIntLit 1)) (EIntLit 3)
-
+-- | Evaluate a value with given context
 evalValueWith :: Expr -> Context -> Maybe Value
 evalValueWith exp ctx = evalStateT (eval exp) ctx
 
------------------------------------------------------------------------------
-
 evalProgram :: Program -> Maybe Value
 evalProgram (Program adts body) = evalStateT (eval body) $
-  Context { binds = foldl add_adt_funs Map.empty adts } -- 可以用某种方式定义上下文，用于记录变量绑定状态
+  Context { binds = foldl add_adt_funs Map.empty adts }
 
+-- | Main eval value function
 evalValue :: Program -> Result
 evalValue p = case evalProgram p of
   Just (VBool b) -> RBool b

@@ -17,7 +17,7 @@ data Example = Example {
 
 mkTestCase :: Example -> [TestTree]
 mkTestCase (Example n exp tree) =
-  [testCase n $ parseMaybe naiveHsParser exp @?= Just tree]
+  [testCase n $ parseMaybe exprParser exp @?= Just tree]
 
 mkTestSuite :: String -> [Example] -> TestTree
 mkTestSuite n es = testGroup n $ es >>= mkTestCase

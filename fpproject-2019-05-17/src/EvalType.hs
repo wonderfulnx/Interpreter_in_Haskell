@@ -197,39 +197,15 @@ eval (ECase e0 ((pat, exp):cas)) = do
       if (et == expt) then evalPE pt et cs
       else lift Nothing
 
----------------------------- some my own test --------------------------------
+-----------------------------------------------------------------------------
 
-expr_my_fact = EIf (EEq (EVar "x") (EIntLit 0))
-  (EIntLit 1)
-  (EMul 
-    (EVar "x") 
-    (EApply 
-      (EVar "fact") 
-      (ESub (EVar "x") (EIntLit 1))
-      )
-    )
-expr_my_let_rec = ELetRec "fact" ("x", TInt) (expr_my_fact, TInt) (EApply (EVar "fact") (EIntLit 6))
-expr_my_let_rec_bad = EAdd (expr_my_let_rec) (EVar "x")
-
-expr_my_let = ELet ("x",(EIntLit 3)) (EMod (EVar "x") (EIntLit 2))
-expr_my_let_bad = EAdd expr_my_let (EVar "x")
-
-my_adts = [ADT "[int]" [("[]@int",[]),("::@int",[TInt,TData "[int]"])], ADT "[char]" [("[]@char",[]),("::@char",[TChar,TData "[char]"])]]
-
-my_context :: Context
-my_context = Context { binds = foldl add_adt_funs Map.empty my_adts }
-
-evalTypeExpr :: Expr -> Maybe (Type, Context)
-evalTypeExpr exp = runStateT (eval exp) $ my_context
-
+-- | Evaluate a type with given context
 evalTypeWith :: Expr -> Context -> Maybe Type
 evalTypeWith exp ctx = evalStateT (eval exp) ctx
 
------------------------------------------------------------------------------
-
+-- | Main eval type function
 evalType :: Program -> Maybe Type
 evalType (Program adts body) = evalStateT (eval body) $
   -- 添加adt的构造函数到binds中
   Context { binds = foldl add_adt_funs Map.empty adts }
 
--- 可以用某种方式定义上下文，用于记录变量绑定状态

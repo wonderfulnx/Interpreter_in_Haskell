@@ -1,3 +1,8 @@
+-- This is a simple test file
+--    Usage: 
+--        stack build
+--        stack runghc test/myTest.hs
+
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
 
 import Test.Framework
@@ -6,9 +11,6 @@ import System.Timeout(timeout)
 import AST
 import EvalValue
 import EvalType
-
--- Usage: stack runghc test/myTest.hs
-
 
 addTimeout test = timeout (3*10^6) test >>= assertJustVerbose "3 seconds timeout exceeded"
 testsWithTimeouts = wrap addTimeout htf_thisModulesTests -- magical preprocessing! 2019-03-06
