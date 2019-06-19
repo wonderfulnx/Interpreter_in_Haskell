@@ -1,6 +1,18 @@
 -- | 此文件提供Parser功能，将输入字符串解析为一个AST
--- | 
--- | 
+-- | 文法：
+-- |   - type:
+-- |     bool(true, false), int, char, type -> type
+-- |   - operator:
+-- |     not: !, and: &&, or: ||
+-- |     add: +, sub:  -, mul: *, div:  /, mod: %
+-- |     eq: ==, neq: /=, lt: <, gt: >, le: <=, ge: >=
+-- |   - expr:
+-- |     IF:      if e1 then e2 else e3
+-- |     LAMBDA:  \x:(type)->exp
+-- |     LET:     let x = e1 in e2
+-- |     LETREC:  def f:(type) = LAMBDA in exp  --(type表示函数返回类型)
+-- |     APPLY:   f$x      --(与haskell中不同,这里的$是左结合的,与haskell中的空格一致)
+
 module Parser where
 
 import AST

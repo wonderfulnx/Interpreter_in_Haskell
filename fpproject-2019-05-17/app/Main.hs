@@ -60,7 +60,7 @@ cmdEval input = do
             Nothing -> liftIO $ print RInvalid
             Just val -> put $ add_bind str tr val ctx
 
-----------------------------------------------------------------------
+------------------------------------------------------------------------------------
 
 getType :: [String] -> StateRepl ()
 getType [] = liftIO $ putStrLn "No argument input!"
