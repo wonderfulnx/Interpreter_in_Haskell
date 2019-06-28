@@ -194,6 +194,7 @@ eval (ECase e0 ((pat, exp):cas)) = do
       c0 <- get
       evalPattern p pt
       expt <- eval e
+      put c0
       if (et == expt) then evalPE pt et cs
       else lift Nothing
 
